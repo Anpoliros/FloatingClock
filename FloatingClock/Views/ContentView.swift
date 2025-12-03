@@ -1,5 +1,5 @@
 import SwiftUI
-internal import Combine
+import Combine
 
 struct ContentView: View {
     @State private var currentTime = Date()
@@ -15,7 +15,7 @@ struct ContentView: View {
                 Color.black.ignoresSafeArea()
                 
                 // 时钟容器
-                clockView(screenHeight: geometry.size.height)
+                clockView(screenHeight: geometry.size.height, screenWidth: geometry.size.width)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // 主题选择按钮
@@ -37,37 +37,40 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
     }
     
-    private func clockView(screenHeight: CGFloat) -> some View {
+    private func clockView(screenHeight: CGFloat, screenWidth: CGFloat) -> some View {
         let timeString = formatTime(currentTime)
         let components = parseTimeComponents(timeString)
         
-        return HStack(spacing: -screenHeight * 0.1) { // 负间距让数字可以重叠
+        // 计算更合理的间距，让时钟显示更"矮胖"
+        // 根据屏幕宽度和数字数量动态计算间距
+        let digitCount = components.filter { $0 != ":" }.count
+        let totalWidth = screenWidth * 0.9 // 使用90%的屏幕宽度
+        let digitWidth = screenHeight * 0.4 // 每个数字的宽度
+        let totalDigitWidth = CGFloat(components.count) * digitWidth
+        
+        // 计算负间距，让数字适当重叠
+        let spacing = (totalWidth - totalDigitWidth) / CGFloat(components.count - 1)
+        
+        return HStack(spacing: spacing) {
             ForEach(Array(components.enumerated()), id: \.offset) { index, component in
-                if component == ":" {
-                    FloatingColonView(
-                        color: selectedTheme.colonColor,
-                        screenHeight: screenHeight
-                    )
-                    .frame(width: screenHeight * 0.15)
-                    .zIndex(999) // 冒号在最上层
-                } else {
-                    digitContainer(
-                        digit: component,
-                        position: index,
-                        totalDigits: components.count,
-                        screenHeight: screenHeight
-                    )
-                }
+                digitContainer(
+                    digit: component,
+                    position: index,
+                    totalDigits: components.count,
+                    screenHeight: screenHeight,
+                    isColon: component == ":"
+                )
             }
         }
     }
     
-    private func digitContainer(digit: String, position: Int, totalDigits: Int, screenHeight: CGFloat) -> some View {
+    private func digitContainer(digit: String, position: Int, totalDigits: Int, screenHeight: CGFloat, isColon: Bool) -> some View {
         let colors = selectedTheme.gradientColors
         
         // 根据位置分配颜色（深浅交错）
+        // 对于冒号，使用特殊的colonColor
         let colorIndex = position % colors.count
-        let color = colors[colorIndex]
+        let color = isColon ? selectedTheme.colonColor : colors[colorIndex]
         
         return FloatingDigitView(
             digit: digit,
@@ -76,8 +79,8 @@ struct ContentView: View {
             position: position,
             screenHeight: screenHeight
         )
-        .frame(width: screenHeight * 0.4) // 给每个数字足够的空间
-        .zIndex(Double(totalDigits - position)) // 确保数字有层叠效果
+        .frame(width: screenHeight * 0.4) // 给每个字符足够的空间
+        .zIndex(isColon ? 999 : Double(totalDigits - position)) // 冒号在最上层
     }
     
     private var themeButton: some View {

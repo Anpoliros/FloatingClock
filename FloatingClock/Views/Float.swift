@@ -9,6 +9,7 @@ struct FloatingDigitView: View {
     
     @State private var offset: CGSize = .zero
     @State private var isEntering = false
+    @State private var currentDigit: String
     
     // 根据屏幕高度计算字体大小（占屏幕高度的80%左右）
     private var fontSize: CGFloat {
@@ -17,19 +18,28 @@ struct FloatingDigitView: View {
     
     // 浮动范围也要根据字体大小调整，确保数字会重合
     private var floatRange: CGFloat {
-        fontSize * 0.01
+        fontSize * 0.05
+    }
+    
+    init(digit: String, color: Color, overlapColor: Color, position: Int, screenHeight: CGFloat) {
+        self.digit = digit
+        self.color = color
+        self.overlapColor = overlapColor
+        self.position = position
+        self.screenHeight = screenHeight
+        _currentDigit = State(initialValue: digit)
     }
     
     var body: some View {
         ZStack {
-            // 主数字
-            Text(digit)
+            // 主数字/冒号
+            Text(currentDigit)
                 .font(.system(size: fontSize, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
                 .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
             
             // 重叠效果 - 使用blend mode
-            Text(digit)
+            Text(currentDigit)
                 .font(.system(size: fontSize, weight: .bold, design: .rounded))
                 .foregroundStyle(overlapColor)
                 .blendMode(.screen)
@@ -45,7 +55,7 @@ struct FloatingDigitView: View {
         }
         .onChange(of: digit) { oldValue, newValue in
             if oldValue != newValue {
-                restartAnimation()
+                restartAnimationWithNewDigit(newValue)
             }
         }
     }
@@ -94,77 +104,20 @@ struct FloatingDigitView: View {
         }
     }
     
-    private func restartAnimation() {
-        // 退出动画
+    private func restartAnimationWithNewDigit(_ newDigit: String) {
+        // 1. 先让旧数字退出（向上消失）
         withAnimation(.easeOut(duration: 0.4)) {
             offset.height -= 150
             isEntering = false
         }
         
-        // 重置并重新进入
+        // 2. 等旧数字完全消失后，更换为新数字
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            currentDigit = newDigit
             offset = .zero
-            startEnterAnimation()
-        }
-    }
-}
-
-// MARK: - Floating Colon View
-struct FloatingColonView: View {
-    let color: Color
-    let screenHeight: CGFloat
-    
-    @State private var offset: CGSize = .zero
-    
-    private var circleSize: CGFloat {
-        screenHeight * 0.05
-    }
-    
-    private var spacing: CGFloat {
-        screenHeight * 0.08
-    }
-    
-    private var floatRange: CGFloat {
-        screenHeight * 0.15
-    }
-    
-    var body: some View {
-        VStack(spacing: spacing) {
-            Circle()
-                .fill(color)
-                .frame(width: circleSize, height: circleSize)
-                .shadow(color: color.opacity(0.8), radius: 15)
             
-            Circle()
-                .fill(color)
-                .frame(width: circleSize, height: circleSize)
-                .shadow(color: color.opacity(0.8), radius: 15)
-        }
-        .offset(offset)
-        .onAppear {
-            startFloatingAnimation()
-        }
-    }
-    
-    private func startFloatingAnimation() {
-        let randomDelay = Double.random(in: 0...5)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + randomDelay) {
-            performFloatCycle()
-        }
-    }
-    
-    private func performFloatCycle() {
-        let targetX = CGFloat.random(in: -floatRange...floatRange)
-        let targetY = CGFloat.random(in: -floatRange...floatRange)
-        let speed = Double.random(in: 15...25)
-        
-        withAnimation(.easeInOut(duration: speed)) {
-            offset = CGSize(width: targetX, height: targetY)
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + speed) {
-            performFloatCycle()
+            // 3. 新数字从下方进入
+            startEnterAnimation()
         }
     }
 }
