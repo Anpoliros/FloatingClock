@@ -33,7 +33,7 @@ struct ColorTheme: Identifiable, Equatable {
     
     static let `default` = ColorTheme(
         name: "默认",
-        primaryColor: Color(red: 0.3, green: 0.4, blue: 0.6),
+        primaryColor: Color(red: 0.1, green: 0.2, blue: 0.6),
         secondaryColor: Color(red: 0.6, green: 0.7, blue: 0.9)
     )
     

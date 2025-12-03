@@ -1,7 +1,8 @@
 import SwiftUI
-import Combine
 
-struct ContentView: View {
+// iOS 15兼容版本
+@available(iOS 15.0, *)
+struct ContentView15: View {
     @State private var currentTime = Date()
     @State private var selectedTheme = ColorTheme.default
     @State private var showThemeSelector = false
@@ -16,6 +17,7 @@ struct ContentView: View {
                 
                 // 时钟容器
                 clockView(screenHeight: geometry.size.height, screenWidth: geometry.size.width)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // 主题选择按钮
                 VStack {
@@ -28,7 +30,6 @@ struct ContentView: View {
                 }
             }
         }
-        .persistentSystemOverlays(.hidden)
         .statusBar(hidden: true)
         .onReceive(timer) { _ in
             currentTime = Date()
@@ -40,7 +41,6 @@ struct ContentView: View {
         let timeString = formatTime(currentTime)
         let components = parseTimeComponents(timeString)
         
-        // 使用ZStack让每个数字独立定位
         return ZStack {
             ForEach(Array(components.enumerated()), id: \.offset) { index, component in
                 digitContainer(
@@ -59,11 +59,10 @@ struct ContentView: View {
     private func digitContainer(digit: String, position: Int, totalDigits: Int, screenHeight: CGFloat, screenWidth: CGFloat, isColon: Bool) -> some View {
         let colors = selectedTheme.gradientColors
         
-        // 根据位置分配颜色（深浅交错）
         let colorIndex = position % colors.count
         let color = isColon ? selectedTheme.colonColor : colors[colorIndex]
         
-        return FloatingDigitView(
+        return FloatingDigitView15(
             digit: digit,
             color: color,
             overlapColor: selectedTheme.overlapColor,
@@ -88,8 +87,7 @@ struct ContentView: View {
                 .clipShape(Circle())
         }
         .popover(isPresented: $showThemeSelector) {
-            ThemeSelectorView(selectedTheme: $selectedTheme)
-                .presentationCompactAdaptation(.popover)
+            ThemeSelectorView15(selectedTheme: $selectedTheme)
         }
     }
     
@@ -102,14 +100,16 @@ struct ContentView: View {
     }
     
     private func parseTimeComponents(_ timeString: String) -> [String] {
+        // 将时间字符串分解为单个字符数组
         return timeString.map { String($0) }
     }
 }
 
-// MARK: - Theme Selector View
-struct ThemeSelectorView: View {
+// MARK: - Theme Selector View (iOS 15版本)
+@available(iOS 15.0, *)
+struct ThemeSelectorView15: View {
     @Binding var selectedTheme: ColorTheme
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
         VStack(spacing: 20) {
@@ -120,7 +120,7 @@ struct ThemeSelectorView: View {
             ForEach(ColorTheme.allThemes) { theme in
                 Button(action: {
                     selectedTheme = theme
-                    dismiss()
+                    presentationMode.wrappedValue.dismiss()
                 }) {
                     HStack {
                         HStack(spacing: 5) {
@@ -155,6 +155,9 @@ struct ThemeSelectorView: View {
     }
 }
 
-#Preview {
-    ContentView()
+@available(iOS 15.0, *)
+struct ContentView15_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView15()
+    }
 }
