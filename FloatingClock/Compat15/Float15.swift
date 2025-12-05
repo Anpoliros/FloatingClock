@@ -3,7 +3,6 @@ import Combine
 
 @available(iOS 15.0, *)
 struct FloatingDigitView15: View {
-    // ... 属性保持不变
     let digit: String
     let color: Color
     let overlapColor: Color
@@ -20,13 +19,9 @@ struct FloatingDigitView15: View {
     @State private var currentDigit: String
     @State private var digitId: UUID = UUID()
     
-    // 关键修改：监听配置
     @ObservedObject private var config = FloatConfig.shared
     
-    private var fontSize: CGFloat {
-        screenHeight * config.fontSizeRatio
-    }
-    
+    private var fontSize: CGFloat { screenHeight * config.fontSizeRatio }
     private var floatRangeX: CGFloat { screenWidth * 0.01 }
     private var floatRangeY: CGFloat { screenHeight * config.floatRangeYRatio }
     private var rotationRange: Double { config.rotationRange }
@@ -44,10 +39,19 @@ struct FloatingDigitView15: View {
         }
     }
     
+    private var activeOpacity: Double {
+        if config.animationStyle == .crossfade {
+            return isEntering ? digitOpacity : 0.0
+        } else {
+            return digitOpacity
+        }
+    }
+
     private var centerPosition: CGPoint {
-        // 监听 spreadFactor
         let x = screenWidth * config.horizontalPositions[position]
-        let y = screenHeight * 0.5
+        let visualCorrection = isColon ? -(screenHeight * 0.08) : 0
+        let y = (screenHeight * 0.5) + visualCorrection
+        
         return CGPoint(x: x, y: y)
     }
     
@@ -77,29 +81,21 @@ struct FloatingDigitView15: View {
                 .blendMode(.plusLighter)
                 .opacity(0.4)
         }
-        .opacity(digitOpacity)
+        .opacity(activeOpacity)
         .rotationEffect(.degrees(rotation))
         .fixedSize()
         .position(x: centerPosition.x + offsetX, y: centerPosition.y + offsetY)
-        .opacity(isEntering ? 1 : 0)
-        .offset(y: isEntering ? 0 : 100)
+        // 初始加载位置逻辑
+        .offset(y: isEntering ? 0 : (config.animationStyle == .crossfade ? 100 : screenHeight))
         .id(digitId)
         .onAppear {
+            isEntering = true
             startFloatingAnimation()
-            startEnterAnimation()
         }
-        .id("\(digit)-\(position)")
         .task(id: digit) {
             if currentDigit != digit {
                 restartAnimationWithNewDigit(digit)
             }
-        }
-    }
-    
-    // 动画函数保持不变 (startEnterAnimation, startFloatingAnimation, performFloatCycle, restartAnimationWithNewDigit)
-    private func startEnterAnimation() {
-        withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
-            isEntering = true
         }
     }
     
@@ -126,17 +122,49 @@ struct FloatingDigitView15: View {
     }
     
     private func restartAnimationWithNewDigit(_ newDigit: String) {
-        withAnimation(.easeOut(duration: 0.4)) {
-            offsetY -= 150
-            isEntering = false
+        let exitDuration = 0.5
+        let resetDelay: Double
+        
+        // 1. 退出
+        if config.animationStyle == .fly {
+            withAnimation(.easeIn(duration: exitDuration)) {
+                offsetY = -screenHeight // 飞向上方
+            }
+            resetDelay = exitDuration
+        } else {
+            withAnimation(.easeOut(duration: exitDuration * 0.8)) {
+                offsetY = -screenHeight
+                isEntering = false
+            }
+            resetDelay = exitDuration * 0.8
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        
+        // 2. 进入
+        DispatchQueue.main.asyncAfter(deadline: .now() + resetDelay) {
             currentDigit = newDigit
             digitId = UUID()
-            offsetX = 0
-            offsetY = 0
             rotation = baseRotationAngle
-            startEnterAnimation()
+            
+            if config.animationStyle == .fly {
+                // Fly: 瞬移到下方
+                offsetY = screenHeight
+                offsetX = 0
+                // 向上飞回
+                withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) {
+                    offsetY = 0
+                }
+            } else {
+                // Crossfade 模式
+                offsetX = 0
+                offsetY = 0
+                rotation = baseRotationAngle
+//                withAnimation(.easeIn(duration: exitDuration * 0.8)) {
+//                    isEntering = true
+//                }
+                withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
+                    isEntering = true
+                }
+            }
         }
     }
 }

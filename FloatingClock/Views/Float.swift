@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 @available(iOS 17.0, *)
 struct FloatingDigitView: View {
@@ -17,44 +18,56 @@ struct FloatingDigitView: View {
     @State private var isEntering = false
     @State private var currentDigit: String
     
-    // 关键修改：使用 @ObservedObject 监听配置变化
     @ObservedObject private var config = FloatConfig.shared
     
-    // 根据屏幕高度计算字体大小
-    private var fontSize: CGFloat {
-        screenHeight * config.fontSizeRatio
-    }
+    private var fontSize: CGFloat { screenHeight * config.fontSizeRatio }
+    private var floatRangeX: CGFloat { screenWidth * config.floatRangeXRatio }
+    private var floatRangeY: CGFloat { screenHeight * config.floatRangeYRatio }
+    private var rotationRange: Double { config.rotationRange }
     
-    // 浮动动画的范围
-    private var floatRangeX: CGFloat {
-        screenWidth * config.floatRangeXRatio
-    }
-    
-    private var floatRangeY: CGFloat {
-        screenHeight * config.floatRangeYRatio
-    }
-    
-    private var rotationRange: Double {
-        config.rotationRange
-    }
-    
-    // 根据位置返回初始旋转角度
     private var baseRotationAngle: Double {
         config.getBaseRotation(position: position, isColon: isColon)
     }
     
-    // 根据位置返回透明度
     private var digitOpacity: Double {
         if isColon { return 0.98 }
-        return 1.0
+        switch position {
+        case 0, 3: return 0.75
+        case 1, 4: return 0.85
+        default: return 0.8
+        }
     }
     
-    // 计算数字在屏幕上的中心位置
+    // 计算当前是否需要隐藏 (用于Crossfade)
+    private var activeOpacity: Double {
+        if config.animationStyle == .crossfade {
+            // Crossfade: 进入前完全透明
+            return isEntering ? digitOpacity : 0.0
+        } else {
+            // Fly: 始终保持不透明度 (依靠 Y 轴位移隐藏)
+            return digitOpacity
+        }
+    }
+    
+//    private var centerPosition: CGPoint {
+//        let x = screenWidth * config.horizontalPositions[position]
+//        let y = screenHeight * 0.5
+//        return CGPoint(x: x, y: y)
+//    }
+//    
+//    // 在 FloatingDigitView (及 FloatingDigitView15) 中找到 centerPosition
+
     private var centerPosition: CGPoint {
-        // 当 config.spreadFactor 变化时，horizontalPositions 会重新计算
-        let xRatio = config.horizontalPositions[position]
-        let x = screenWidth * xRatio
-        let y = screenHeight * 0.5
+        // 监听 spreadFactor
+        let x = screenWidth * config.horizontalPositions[position]
+        
+        // 原有逻辑: let y = screenHeight * 0.5
+        
+        // 修改后: 针对冒号进行视觉修正
+        // 冒号通常偏下，需要向上提。screenHeight * 0.1 左右通常能视觉居中，可根据感觉微调
+        let visualCorrection = isColon ? -(screenHeight * 0.08) : 0
+        let y = (screenHeight * 0.5) + visualCorrection
+        
         return CGPoint(x: x, y: y)
     }
     
@@ -73,28 +86,27 @@ struct FloatingDigitView: View {
     
     var body: some View {
         ZStack {
-            // 主数字/冒号
             Text(currentDigit)
                 .font(.system(size: fontSize, weight: config.fontWeight, design: config.fontDesign))
                 .foregroundStyle(color)
                 .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
             
-            // 重叠光效
             Text(currentDigit)
                 .font(.system(size: fontSize, weight: config.fontWeight, design: config.fontDesign))
                 .foregroundStyle(overlapColor)
                 .blendMode(.plusLighter)
                 .opacity(0.4)
         }
-        .opacity(digitOpacity)
+        // MARK: - Opacity Logic Modified
+        .opacity(activeOpacity)
         .rotationEffect(.degrees(rotation))
         .fixedSize()
-        // position 修改时会实时刷新布局
         .position(x: centerPosition.x + offsetX, y: centerPosition.y + offsetY)
-        .opacity(isEntering ? 1 : 0)
-        .offset(y: isEntering ? 0 : 100)
+        // MARK: - Initial Entry Logic
+        // 初始加载时，如果是 Crossfade 则透明度0；如果是 Fly 则在屏幕下方
+        .offset(y: isEntering ? 0 : (config.animationStyle == .crossfade ? 100 : screenHeight))
         .onAppear {
-            startEnterAnimation()
+            isEntering = true // 触发初始进场
             startFloatingAnimation()
         }
         #if swift(>=5.9)
@@ -112,16 +124,8 @@ struct FloatingDigitView: View {
         #endif
     }
     
-    // 动画逻辑保持不变...
-    private func startEnterAnimation() {
-        withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
-            isEntering = true
-        }
-    }
-    
     private func startFloatingAnimation() {
         let randomDelay = Double.random(in: 0...5)
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + randomDelay) {
             performFloatCycle(speed: config.baseSpeed + Double(position) * 1.5)
         }
@@ -137,24 +141,56 @@ struct FloatingDigitView: View {
             offsetY = targetY
             rotation = targetRotation
         }
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + speed) {
             performFloatCycle(speed: Double.random(in: 15...25))
         }
     }
     
     private func restartAnimationWithNewDigit(_ newDigit: String) {
-        withAnimation(.easeOut(duration: 0.4)) {
-            offsetY -= 150
-            isEntering = false
+        let exitDuration = 0.5
+        let resetDelay: Double
+        
+        // 1. 旧数字退出
+        if config.animationStyle == .fly {
+            // Fly: 向上飞出屏幕顶部 (保持不透明)
+            withAnimation(.easeIn(duration: exitDuration)) {
+                offsetY = -screenHeight // 飞向顶部
+            }
+            resetDelay = exitDuration
+        } else {
+            // Crossfade: 原地淡出
+            withAnimation(.easeOut(duration: exitDuration * 0.8)) {
+                offsetY = -screenHeight
+                isEntering = false
+            }
+            resetDelay = exitDuration * 0.8
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        // 2. 重置并进入新数字
+        DispatchQueue.main.asyncAfter(deadline: .now() + resetDelay) {
             currentDigit = newDigit
-            offsetX = 0
-            offsetY = 0
             rotation = baseRotationAngle
-            startEnterAnimation()
+            
+            if config.animationStyle == .fly {
+                // Fly 模式: 瞬移到屏幕正下方，准备向上飞入
+                offsetY = screenHeight
+                offsetX = 0
+                // 立即执行进入动画
+                withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) {
+                    offsetY = 0 // 飞回中心
+                }
+            } else {
+                // Crossfade 模式
+                offsetX = 0
+                offsetY = 0
+                rotation = baseRotationAngle
+//                withAnimation(.easeIn(duration: exitDuration * 0.8)) {
+//                    isEntering = true
+//                }
+                withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
+                    isEntering = true
+                }
+            }
         }
     }
 }
