@@ -1,9 +1,9 @@
 import SwiftUI
 import Combine
 
-// iOS 15兼容版本
 @available(iOS 15.0, *)
 struct FloatingDigitView15: View {
+    // ... 属性保持不变
     let digit: String
     let color: Color
     let overlapColor: Color
@@ -20,40 +20,23 @@ struct FloatingDigitView15: View {
     @State private var currentDigit: String
     @State private var digitId: UUID = UUID()
     
-    // 配置：数字和冒号在屏幕上的水平位置
-    private static let horizontalPositions: [CGFloat] = [0.15, 0.37, 0.5, 0.63, 0.85]
+    // 关键修改：监听配置
+    @ObservedObject private var config = FloatConfig.shared
     
     private var fontSize: CGFloat {
-        screenHeight * 0.80
+        screenHeight * config.fontSizeRatio
     }
     
-    private var floatRangeX: CGFloat {
-        screenWidth * 0.01
-    }
-    
-    private var floatRangeY: CGFloat {
-        screenHeight * 0.00
-    }
-    
-    private var rotationRange: Double {
-        5.0
-    }
+    private var floatRangeX: CGFloat { screenWidth * 0.01 }
+    private var floatRangeY: CGFloat { screenHeight * config.floatRangeYRatio }
+    private var rotationRange: Double { config.rotationRange }
     
     private var baseRotationAngle: Double {
-        if isColon { return 0 }
-        
-        switch position {
-        case 0: return -5
-        case 1: return -3
-        case 3: return 3
-        case 4: return 5
-        default: return 0
-        }
+        config.getBaseRotation(position: position, isColon: isColon)
     }
     
     private var digitOpacity: Double {
         if isColon { return 0.98 }
-        
         switch position {
         case 0, 3: return 0.75
         case 1, 4: return 0.85
@@ -62,7 +45,8 @@ struct FloatingDigitView15: View {
     }
     
     private var centerPosition: CGPoint {
-        let x = screenWidth * Self.horizontalPositions[position]
+        // 监听 spreadFactor
+        let x = screenWidth * config.horizontalPositions[position]
         let y = screenHeight * 0.5
         return CGPoint(x: x, y: y)
     }
@@ -77,29 +61,18 @@ struct FloatingDigitView15: View {
         self.isColon = isColon
         self.fontWeight = fontWeight
         _currentDigit = State(initialValue: digit)
-        _rotation = State(initialValue: Self.getBaseRotation(position: position, isColon: isColon))
-    }
-    
-    private static func getBaseRotation(position: Int, isColon: Bool) -> Double {
-        if isColon { return 0 }
-        switch position {
-        case 0: return -7
-        case 1: return -5
-        case 3: return 5
-        case 4: return 7
-        default: return 0
-        }
+        _rotation = State(initialValue: FloatConfig.shared.getBaseRotation(position: position, isColon: isColon))
     }
     
     var body: some View {
         ZStack {
             Text(currentDigit)
-                .font(.system(size: fontSize, weight: fontWeight, design: .rounded))
+                .font(.system(size: fontSize, weight: config.fontWeight, design: config.fontDesign))
                 .foregroundStyle(color)
                 .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
             
             Text(currentDigit)
-                .font(.system(size: fontSize, weight: fontWeight, design: .rounded))
+                .font(.system(size: fontSize, weight: config.fontWeight, design: config.fontDesign))
                 .foregroundStyle(overlapColor)
                 .blendMode(.plusLighter)
                 .opacity(0.4)
@@ -115,40 +88,25 @@ struct FloatingDigitView15: View {
             startFloatingAnimation()
             startEnterAnimation()
         }
-        // 使用 id + onChange 的组合来监听变化
-        .id("\(digit)-\(position)")  // 当 digit 变化时，会触发视图重建
-        .task(id: digit) {  // task 在 iOS 15+ 可用，每次 digit 变化都会触发
+        .id("\(digit)-\(position)")
+        .task(id: digit) {
             if currentDigit != digit {
                 restartAnimationWithNewDigit(digit)
             }
         }
     }
     
+    // 动画函数保持不变 (startEnterAnimation, startFloatingAnimation, performFloatCycle, restartAnimationWithNewDigit)
     private func startEnterAnimation() {
         withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
             isEntering = true
         }
-        
-        // 如果不想要弹跳，可以注释掉这部分
-//        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-//            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-//                offsetY -= 15
-//            }
-//            
-//            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-//                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-//                    offsetY += 15
-//                }
-//            }
-//        }
     }
     
     private func startFloatingAnimation() {
         let randomDelay = Double.random(in: 0...5)
-        let baseSpeed = 20.0
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + randomDelay) {
-            performFloatCycle(speed: baseSpeed + Double(position) * 1.5)
+            performFloatCycle(speed: config.baseSpeed + Double(position) * 1.5)
         }
     }
     
@@ -162,7 +120,6 @@ struct FloatingDigitView15: View {
             offsetY = targetY
             rotation = targetRotation
         }
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + speed) {
             performFloatCycle(speed: Double.random(in: 15...25))
         }
@@ -173,7 +130,6 @@ struct FloatingDigitView15: View {
             offsetY -= 150
             isEntering = false
         }
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             currentDigit = newDigit
             digitId = UUID()
@@ -184,5 +140,3 @@ struct FloatingDigitView15: View {
         }
     }
 }
-
-// 不再需要自定义 Just Publisher
