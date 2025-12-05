@@ -1,10 +1,11 @@
 import SwiftUI
+import Combine
 
 // iOS 15兼容版本
 @available(iOS 15.0, *)
 struct ContentView15: View {
     @State private var currentTime = Date()
-    @State private var selectedTheme = ColorTheme.default
+    @State private var selectedTheme = ColorTheme.ocean
     @State private var showThemeSelector = false
     
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -59,8 +60,19 @@ struct ContentView15: View {
     private func digitContainer(digit: String, position: Int, totalDigits: Int, screenHeight: CGFloat, screenWidth: CGFloat, isColon: Bool) -> some View {
         let colors = selectedTheme.gradientColors
         
-        let colorIndex = position % colors.count
-        let color = isColon ? selectedTheme.colonColor : colors[colorIndex]
+        // 计算实际的数字索引（跳过冒号位置）
+        // 位置: 0(数字0) 1(数字1) 2(冒号) 3(数字2) 4(数字3)
+        // 映射: 0->colors[0], 1->colors[1], 2->冒号色, 3->colors[2], 4->colors[3]
+        let digitIndex: Int
+        if position < 2 {
+            digitIndex = position  // 前两位: 0, 1
+        } else if position == 2 {
+            digitIndex = -1  // 冒号位置
+        } else {
+            digitIndex = position - 1  // 后两位: 3->2, 4->3
+        }
+        
+        let color = isColon ? selectedTheme.colonColor : colors[digitIndex]
         
         return FloatingDigitView15(
             digit: digit,
@@ -95,7 +107,7 @@ struct ContentView15: View {
     
     private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "H:mm"
+        formatter.dateFormat = "HH:mm"  // 改为 HH 以显示前导零
         return formatter.string(from: date)
     }
     

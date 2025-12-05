@@ -1,5 +1,6 @@
 import SwiftUI
 
+@available(iOS 17.0, *)
 struct FloatingDigitView: View {
     let digit: String
     let color: Color
@@ -34,7 +35,7 @@ struct FloatingDigitView: View {
     }
     
     private var rotationRange: Double {
-        8.0  // 旋转范围 ±15度
+        5.0  // 旋转范围 ±15度
     }
     
     // 根据位置返回初始旋转角度
@@ -42,10 +43,10 @@ struct FloatingDigitView: View {
         if isColon { return 0 }
         
         switch position {
-        case 0: return -7
-        case 1: return -5
-        case 3: return 5
-        case 4: return 7
+        case 0: return -5
+        case 1: return -3
+        case 3: return 3
+        case 4: return 5
         default: return 0
         }
     }
@@ -114,14 +115,23 @@ struct FloatingDigitView: View {
         .opacity(isEntering ? 1 : 0)
         .offset(y: isEntering ? 0 : 100)
         .onAppear {
-            startFloatingAnimation()
             startEnterAnimation()
+            startFloatingAnimation()
         }
+        // 条件编译：根据iOS版本选择不同的API
+        #if swift(>=5.9) // Swift 5.9+ (iOS 17+)
         .onChange(of: digit) { oldValue, newValue in
             if oldValue != newValue {
                 restartAnimationWithNewDigit(newValue)
             }
         }
+        #else // iOS 15-16
+        .onReceive(Just(digit)) { newDigit in
+            if currentDigit != newDigit {
+                restartAnimationWithNewDigit(newDigit)
+            }
+        }
+        #endif
     }
     
     private func startEnterAnimation() {
@@ -129,18 +139,18 @@ struct FloatingDigitView: View {
             isEntering = true
         }
         
-        // 模拟浮力弹跳
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                offsetY -= 15
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    offsetY += 15
-                }
-            }
-        }
+//        // 模拟浮力弹跳
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+//            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+//                offsetY -= 15
+//            }
+//            
+//            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+//                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+//                    offsetY += 15
+//                }
+//            }
+//        }
     }
     
     private func startFloatingAnimation() {
@@ -193,10 +203,51 @@ struct ClockLayoutConfig {
     static var horizontalPositions: [CGFloat] = [0.22, 0.37, 0.5, 0.63, 0.78]
     
     // 字体粗细
-    static var fontWeight: Font.Weight = .black
+    static var fontWeight: Font.Weight = .heavy
     
     // 可以根据需要调整这些值
     // 例如：
     // - 让数字更紧凑：[0.25, 0.38, 0.5, 0.62, 0.75]
     // - 让数字更分散：[0.18, 0.35, 0.5, 0.65, 0.82]
 }
+
+
+#if !swift(>=5.9)
+// MARK: - Just Publisher for iOS 15-16
+struct Just<Output>: Publisher {
+    typealias Failure = Never
+    
+    let output: Output
+    
+    init(_ output: Output) {
+        self.output = output
+    }
+    
+    func receive<S>(subscriber: S) where S: Subscriber, Failure == S.Failure, Output == S.Input {
+        let subscription = JustSubscription(output: output, subscriber: subscriber)
+        subscriber.receive(subscription: subscription)
+    }
+    
+    private class JustSubscription<S: Subscriber>: Subscription where S.Input == Output, S.Failure == Failure {
+        let output: Output
+        var subscriber: S?
+        
+        init(output: Output, subscriber: S) {
+            self.output = output
+            self.subscriber = subscriber
+        }
+        
+        func request(_ demand: Subscribers.Demand) {
+            if let subscriber = subscriber {
+                _ = subscriber.receive(output)
+                subscriber.receive(completion: .finished)
+                self.subscriber = nil
+            }
+        }
+        
+        func cancel() {
+            subscriber = nil
+        }
+    }
+}
+#endif

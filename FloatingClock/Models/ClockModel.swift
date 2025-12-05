@@ -1,29 +1,17 @@
 import SwiftUI
 
 // MARK: - Color Theme Model
+
 struct ColorTheme: Identifiable, Equatable {
     let id = UUID()
     let name: String
-    let primaryColor: Color
-    let secondaryColor: Color
     
-    // 生成渐变色系 - 增加颜色距离，深浅交错
-    var gradientColors: [Color] {
-        // 创建更明显的对比：深-浅-深-浅
-        let colors = [
-            primaryColor,
-            Color.interpolate(from: primaryColor, to: secondaryColor, fraction: 0.25),
-            Color.interpolate(from: primaryColor, to: secondaryColor, fraction: 0.55),
-            Color.interpolate(from: primaryColor, to: secondaryColor, fraction: 0.85)
-        ]
-        
-        // 重新排列实现深浅交错: 0(深), 3(浅), 1(中深), 2(中浅)
-        return [colors[0], colors[3], colors[1], colors[2]]
-    }
+    // 直接指定4个渐变色（深浅交错）
+    let gradientColors: [Color]
     
     // 冒号颜色 - 明亮色
     var colonColor: Color {
-        return Color.white.opacity(0.95)
+        return Color("Colon").opacity(0.6)
     }
     
     // 重叠部分颜色 - 不同的明亮色
@@ -31,31 +19,57 @@ struct ColorTheme: Identifiable, Equatable {
         return Color.white.opacity(0.7)
     }
     
-    static let `default` = ColorTheme(
-        name: "默认",
-        primaryColor: Color(red: 0.1, green: 0.2, blue: 0.6),
-        secondaryColor: Color(red: 0.6, green: 0.7, blue: 0.9)
-    )
+    // 初始化方法：直接传入4个颜色
+    init(name: String, colors: [Color]) {
+        self.name = name
+        self.gradientColors = colors
+    }
     
-    static let pink = ColorTheme(
-        name: "粉紫",
-        primaryColor: Color(red: 0.85, green: 0.3, blue: 0.5),
-        secondaryColor: Color(red: 0.5, green: 0.3, blue: 0.95)
-    )
-    
+    // 海洋主题
     static let ocean = ColorTheme(
         name: "海洋",
-        primaryColor: Color(red: 0.15, green: 0.4, blue: 0.75),
-        secondaryColor: Color(red: 0.4, green: 0.75, blue: 0.95)
+        colors: [
+            Color("Ocean/1").opacity(1.0),          // 深蓝
+            Color("Ocean/2").opacity(0.75),                    // 浅蓝
+            Color("Ocean/1").opacity(1.0),      // 中深蓝
+            Color("Ocean/2").opacity(0.75)        // 中浅蓝
+        ]
     )
     
+    // 草甸主题
+    static let grass = ColorTheme(
+        name: "草甸",
+        colors: [
+            Color("Grass/1"),                    // 深绿
+            Color("Grass/2"),                    // 浅绿
+            Color("Grass/1").opacity(0.85),      // 中深绿
+            Color("Grass/2").opacity(0.9)        // 中浅绿
+        ]
+    )
+    
+    // 彩云主题
+    static let fantasy = ColorTheme(
+        name: "彩云",
+        colors: [
+            Color("Fantasy/1"),                  // 深紫
+            Color("Fantasy/2"),                  // 浅粉
+            Color("Fantasy/1").opacity(0.85),    // 中深紫
+            Color("Fantasy/2").opacity(0.9)      // 中浅粉
+        ]
+    )
+    
+    // 日落主题
     static let sunset = ColorTheme(
         name: "日落",
-        primaryColor: Color(red: 0.85, green: 0.4, blue: 0.25),
-        secondaryColor: Color(red: 0.95, green: 0.75, blue: 0.45)
+        colors: [
+            Color("Sunset/1"),                   // 深橙
+            Color("Sunset/2"),                   // 浅橙
+            Color("Sunset/1").opacity(0.85),     // 中深橙
+            Color("Sunset/2").opacity(0.9)       // 中浅橙
+        ]
     )
     
-    static let allThemes: [ColorTheme] = [.default, .pink, .ocean, .sunset]
+    static let allThemes: [ColorTheme] = [.ocean, .grass, .fantasy, .sunset]
 }
 
 // MARK: - Time Digit Model
@@ -65,17 +79,9 @@ struct TimeDigit: Identifiable {
     let position: Int // 0-3 表示四个位置
 }
 
-// MARK: - Color Extension
-extension Color {
-    static func interpolate(from: Color, to: Color, fraction: Double) -> Color {
-        let fromComponents = UIColor(from).cgColor.components ?? [0, 0, 0, 1]
-        let toComponents = UIColor(to).cgColor.components ?? [0, 0, 0, 1]
-        
-        let r = fromComponents[0] + (toComponents[0] - fromComponents[0]) * fraction
-        let g = fromComponents[1] + (toComponents[1] - fromComponents[1]) * fraction
-        let b = fromComponents[2] + (toComponents[2] - fromComponents[2]) * fraction
-        let a = fromComponents[3] + (toComponents[3] - fromComponents[3]) * fraction
-        
-        return Color(red: r, green: g, blue: b, opacity: a)
+// Provide a custom Equatable implementation for ColorTheme
+extension ColorTheme {
+    static func ==(lhs: ColorTheme, rhs: ColorTheme) -> Bool {
+        return lhs.name == rhs.name
     }
 }

@@ -21,32 +21,32 @@ struct FloatingDigitView15: View {
     @State private var digitId: UUID = UUID()
     
     // 配置：数字和冒号在屏幕上的水平位置
-    private static let horizontalPositions: [CGFloat] = [0.22, 0.37, 0.5, 0.63, 0.78]
+    private static let horizontalPositions: [CGFloat] = [0.15, 0.37, 0.5, 0.63, 0.85]
     
     private var fontSize: CGFloat {
-        screenHeight * 0.65
+        screenHeight * 0.80
     }
     
     private var floatRangeX: CGFloat {
-        screenWidth * 0.08
+        screenWidth * 0.01
     }
     
     private var floatRangeY: CGFloat {
-        screenHeight * 0.08
+        screenHeight * 0.00
     }
     
     private var rotationRange: Double {
-        15.0
+        5.0
     }
     
     private var baseRotationAngle: Double {
         if isColon { return 0 }
         
         switch position {
-        case 0: return -7
-        case 1: return -5
-        case 3: return 5
-        case 4: return 7
+        case 0: return -5
+        case 1: return -3
+        case 3: return 3
+        case 4: return 5
         default: return 0
         }
     }
@@ -115,9 +115,11 @@ struct FloatingDigitView15: View {
             startFloatingAnimation()
             startEnterAnimation()
         }
-        .onReceive(Just(digit)) { newDigit in
-            if currentDigit != newDigit {
-                restartAnimationWithNewDigit(newDigit)
+        // 使用 id + onChange 的组合来监听变化
+        .id("\(digit)-\(position)")  // 当 digit 变化时，会触发视图重建
+        .task(id: digit) {  // task 在 iOS 15+ 可用，每次 digit 变化都会触发
+            if currentDigit != digit {
+                restartAnimationWithNewDigit(digit)
             }
         }
     }
@@ -127,17 +129,18 @@ struct FloatingDigitView15: View {
             isEntering = true
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                offsetY -= 15
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    offsetY += 15
-                }
-            }
-        }
+        // 如果不想要弹跳，可以注释掉这部分
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+//            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+//                offsetY -= 15
+//            }
+//            
+//            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+//                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+//                    offsetY += 15
+//                }
+//            }
+//        }
     }
     
     private func startFloatingAnimation() {
@@ -182,40 +185,4 @@ struct FloatingDigitView15: View {
     }
 }
 
-// MARK: - Just Publisher
-struct Just<Output>: Publisher {
-    typealias Failure = Never
-    
-    let output: Output
-    
-    init(_ output: Output) {
-        self.output = output
-    }
-    
-    func receive<S>(subscriber: S) where S: Subscriber, Failure == S.Failure, Output == S.Input {
-        let subscription = JustSubscription(output: output, subscriber: subscriber)
-        subscriber.receive(subscription: subscription)
-    }
-    
-    private class JustSubscription<S: Subscriber>: Subscription where S.Input == Output, S.Failure == Failure {
-        let output: Output
-        var subscriber: S?
-        
-        init(output: Output, subscriber: S) {
-            self.output = output
-            self.subscriber = subscriber
-        }
-        
-        func request(_ demand: Subscribers.Demand) {
-            if let subscriber = subscriber {
-                _ = subscriber.receive(output)
-                subscriber.receive(completion: .finished)
-                self.subscriber = nil
-            }
-        }
-        
-        func cancel() {
-            subscriber = nil
-        }
-    }
-}
+// 不再需要自定义 Just Publisher
